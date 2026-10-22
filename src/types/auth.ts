@@ -25,8 +25,11 @@ export interface LoginResponse {
   user_name: string;
 }
 
-export interface AuthState {
+export interface AuthContextValue {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+  loading: boolean;
+  login: (credentials: LoginRequest) => Promise<User>;
+  logout: () => void;
 }
