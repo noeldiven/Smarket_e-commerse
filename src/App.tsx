@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { STORE_CATEGORIES } from "./constants/categories";
@@ -6,6 +5,8 @@ import type { StoreCategory } from "./constants/categories";
 import type { Product, StoreProduct, UserRole } from "./types";
 import { isStoreProduct } from "./utils/isStoreProduct";
 import "./App.css";
+import { Navigate } from "react-router-dom";
+import { LoginPage } from "./pages/LoginPage";
 
 type ProductFormData = {
   name: string;
@@ -109,13 +110,15 @@ function App() {
 
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [search, setSearch] = useState("");
+  const [currentView, setCurrentView] = useState<"store" | "login">("store");
   const [category, setCategory] = useState<StoreCategory | "todas">("todas");
   const [availability, setAvailability] = useState("todos");
   const [cartCount, setCartCount] = useState(0);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] =
-    useState<StoreProduct | null>(null);
+  const [editingProduct, setEditingProduct] = useState<StoreProduct | null>(
+    null,
+  );
   const [form, setForm] = useState<ProductFormData>(EMPTY_FORM);
   const [notice, setNotice] = useState("");
 
@@ -236,9 +239,7 @@ function App() {
 
     if (!confirmed) return;
 
-    setProducts((current) =>
-      current.filter((item) => item.id !== product.id),
-    );
+    setProducts((current) => current.filter((item) => item.id !== product.id));
     setNotice("Producto eliminado de la vista de demostración.");
   }
 
@@ -258,6 +259,11 @@ function App() {
 
     setCartCount((current) => current + 1);
     setNotice(`${product.name} agregado a tu selección de compra.`);
+    
+    
+  }
+  if (currentView === "login") {
+    return <LoginPage onBack={() => setCurrentView("store")} />; 
   }
 
   return (
@@ -306,6 +312,13 @@ function App() {
               className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold transition hover:border-indigo-300 hover:bg-indigo-50 sm:px-4 sm:text-sm"
             >
               Ver como {isAdmin ? "cliente" : "admin"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentView("login")}
+              className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 sm:px-4 sm:text-sm shadow-sm"
+            >
+              Iniciar sesión
             </button>
             {!isAdmin && (
               <button
@@ -494,7 +507,9 @@ function App() {
           ) : (
             <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
               <span className="text-5xl">🔎</span>
-              <h3 className="mt-4 text-lg font-bold">No encontramos productos</h3>
+              <h3 className="mt-4 text-lg font-bold">
+                No encontramos productos
+              </h3>
               <p className="mt-2 text-sm text-slate-500">
                 Prueba otra búsqueda o selecciona una categoría diferente.
               </p>
@@ -685,7 +700,9 @@ function MetricCard({ label, value, icon, color }: MetricCardProps) {
   return (
     <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between gap-2">
-        <span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${colors[color]}`}>
+        <span
+          className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${colors[color]}`}
+        >
           {icon}
         </span>
         <span className="text-2xl font-black tracking-tight">{value}</span>
