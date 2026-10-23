@@ -583,7 +583,7 @@ function App() {
               </FormField>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField label="Precio (S/)">
+                <FormField label="Precio (US$)">
                   <input
                     required
                     type="number"
@@ -789,7 +789,7 @@ function ProductCard({
               Precio
             </p>
             <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-              S/ {Number(product.price).toFixed(2)}
+              US$ {Number(product.price).toFixed(2)}
             </p>
           </div>
           <p className="text-right text-xs text-slate-500">
