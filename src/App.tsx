@@ -2,8 +2,14 @@ import { useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { STORE_CATEGORIES } from "./constants/categories";
 import type { StoreCategory } from "./constants/categories";
-import type { Product, StoreProduct, UserRole } from "./types";
-import { isStoreProduct } from "./utils/isStoreProduct";
+import type { ProductCreate, StoreProduct, UserRole } from "./types";
+import { useProducts } from "./hooks/useProducts";
+import {
+  createProduct,
+  deleteProduct,
+  updateProduct,
+} from "./services/productService";
+import { getErrorMessage } from "./services/api";
 import "./App.css";
 import { Navigate } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
@@ -16,69 +22,6 @@ type ProductFormData = {
   category: StoreCategory;
   image_url: string;
 };
-
-const INITIAL_PRODUCTS: Product[] = [
-  {
-    id: 1,
-    name: "Agua mineral",
-    description: "Agua mineral natural de 625 ml.",
-    price: "2.50",
-    stock: 35,
-    category: "Smarket-Bebidas",
-    image_url: "",
-    created_at: "2026-10-22T10:00:00Z",
-  },
-  {
-    id: 2,
-    name: "Leche evaporada",
-    description: "Leche evaporada entera, lata de 400 g.",
-    price: "4.80",
-    stock: 18,
-    category: "Smarket-Lácteos",
-    image_url: "",
-    created_at: "2026-10-22T10:00:00Z",
-  },
-  {
-    id: 3,
-    name: "Galletas de chocolate",
-    description: "Galletas crocantes ideales para compartir.",
-    price: "3.90",
-    stock: 24,
-    category: "Smarket-Snacks",
-    image_url: "",
-    created_at: "2026-10-22T10:00:00Z",
-  },
-  {
-    id: 4,
-    name: "Pan integral",
-    description: "Pan integral fresco, elaborado diariamente.",
-    price: "6.50",
-    stock: 12,
-    category: "Smarket-Panadería",
-    image_url: "",
-    created_at: "2026-10-22T10:00:00Z",
-  },
-  {
-    id: 5,
-    name: "Arroz extra",
-    description: "Arroz de grano seleccionado, bolsa de 1 kg.",
-    price: "4.20",
-    stock: 0,
-    category: "Smarket-Almacén",
-    image_url: "",
-    created_at: "2026-10-22T10:00:00Z",
-  },
-  {
-    id: 6,
-    name: "Detergente",
-    description: "Detergente para el cuidado de tu ropa.",
-    price: "8.90",
-    stock: 15,
-    category: "Smarket-Limpieza",
-    image_url: "",
-    created_at: "2026-10-22T10:00:00Z",
-  },
-];
 
 const EMPTY_FORM: ProductFormData = {
   name: "",
@@ -108,7 +51,9 @@ function App() {
   // No representa una autenticación real.
   const [viewRole, setViewRole] = useState<UserRole>("cliente");
 
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  // Productos reales de la API, ya filtrados a las categorías Smarket-
+  const { products: storeProducts, loading, error, refetch } = useProducts();
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [currentView, setCurrentView] = useState<"store" | "login">("store");
   const [category, setCategory] = useState<StoreCategory | "todas">("todas");
@@ -123,11 +68,6 @@ function App() {
   const [notice, setNotice] = useState("");
 
   const isAdmin = viewRole === "admin";
-
-  const storeProducts = useMemo(
-    () => products.filter(isStoreProduct),
-    [products],
-  );
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -179,7 +119,7 @@ function App() {
     setForm(EMPTY_FORM);
   }
 
-  function handleSaveProduct(event: FormEvent<HTMLFormElement>) {
+  async function handleSaveProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const price = Number(form.price);
@@ -196,62 +136,59 @@ function App() {
       return;
     }
 
-    if (editingProduct) {
-      setProducts((current) =>
-        current.map((product) =>
-          product.id === editingProduct.id
-            ? {
-                ...product,
-                name: form.name.trim(),
-                description: form.description.trim() || null,
-                price: String(price),
-                stock,
-                category: form.category,
-                image_url: form.image_url.trim() || null,
-              }
-            : product,
-        ),
-      );
-      setNotice("Producto actualizado en la vista de demostración.");
-    } else {
-      const newProduct: StoreProduct = {
-        id: Math.max(0, ...products.map((product) => product.id)) + 1,
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        price: String(price),
-        stock,
-        category: form.category,
-        image_url: form.image_url.trim() || null,
-        created_at: new Date().toISOString(),
-      };
+    const payload: ProductCreate = {
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
+      price,
+      stock,
+      category: form.category,
+      image_url: form.image_url.trim() || undefined,
+    };
 
-      setProducts((current) => [...current, newProduct]);
-      setNotice("Producto agregado a la vista de demostración.");
+    setSaving(true);
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, payload);
+        setNotice("Producto actualizado.");
+      } else {
+        await createProduct(payload);
+        setNotice("Producto agregado.");
+      }
+      closeModal();
+      refetch();
+    } catch (err) {
+      setNotice(getErrorMessage(err));
+    } finally {
+      setSaving(false);
     }
-
-    closeModal();
   }
 
-  function handleDelete(product: StoreProduct) {
+  async function handleDelete(product: StoreProduct) {
     const confirmed = window.confirm(
-      `¿Deseas eliminar "${product.name}" de la vista de demostración?`,
+      `¿Deseas eliminar "${product.name}"?`,
     );
 
     if (!confirmed) return;
 
-    setProducts((current) => current.filter((item) => item.id !== product.id));
-    setNotice("Producto eliminado de la vista de demostración.");
+    try {
+      await deleteProduct(product.id);
+      setNotice("Producto eliminado.");
+      refetch();
+    } catch (err) {
+      setNotice(getErrorMessage(err));
+    }
   }
 
-  function handleStockChange(product: StoreProduct, amount: number) {
+  async function handleStockChange(product: StoreProduct, amount: number) {
     const newStock = Math.max(0, product.stock + amount);
 
-    setProducts((current) =>
-      current.map((item) =>
-        item.id === product.id ? { ...item, stock: newStock } : item,
-      ),
-    );
-    setNotice("Stock actualizado en la vista de demostración.");
+    try {
+      await updateProduct(product.id, { stock: newStock });
+      setNotice("Stock actualizado.");
+      refetch();
+    } catch (err) {
+      setNotice(getErrorMessage(err));
+    }
   }
 
   function handleBuy(product: StoreProduct) {
@@ -490,7 +427,30 @@ function App() {
             </div>
           )}
 
-          {filteredProducts.length > 0 ? (
+          {loading && storeProducts.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center">
+              <span className="text-5xl">⏳</span>
+              <h3 className="mt-4 text-lg font-bold">Cargando productos...</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                La primera carga puede demorar unos segundos.
+              </p>
+            </div>
+          ) : error ? (
+            <div className="mt-6 rounded-3xl border border-rose-200 bg-rose-50 px-6 py-16 text-center">
+              <span className="text-5xl">⚠️</span>
+              <h3 className="mt-4 text-lg font-bold text-rose-700">
+                No pudimos cargar los productos
+              </h3>
+              <p className="mt-2 text-sm text-rose-600">{error}</p>
+              <button
+                type="button"
+                onClick={refetch}
+                className="mt-5 rounded-xl bg-rose-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-rose-700"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : filteredProducts.length > 0 ? (
             <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredProducts.map((product) => (
                 <ProductCard
@@ -598,7 +558,7 @@ function App() {
               </FormField>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField label="Precio (S/)">
+                <FormField label="Precio (US$)">
                   <input
                     required
                     type="number"
@@ -669,9 +629,14 @@ function App() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-700"
+                  disabled={saving}
+                  className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60"
                 >
-                  {editingProduct ? "Guardar cambios" : "Agregar producto"}
+                  {saving
+                    ? "Guardando..."
+                    : editingProduct
+                      ? "Guardar cambios"
+                      : "Agregar producto"}
                 </button>
               </div>
             </form>
@@ -806,7 +771,7 @@ function ProductCard({
               Precio
             </p>
             <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-              S/ {Number(product.price).toFixed(2)}
+              US$ {Number(product.price).toFixed(2)}
             </p>
           </div>
           <p className="text-right text-xs text-slate-500">

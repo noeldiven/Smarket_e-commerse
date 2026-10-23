@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { StoreProduct } from "../types";
 import { getProducts } from "../services/productService";
 import { getErrorMessage } from "../services/api";
@@ -8,26 +8,34 @@ export function useProducts() {
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const loadProducts = useCallback(async () => {
-    try {
-      const data = await getProducts();
-      setProducts(data.filter(isStoreProduct));
-      setError(null);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Cada vez que cambia, el efecto vuelve a pedir los productos
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    void loadProducts();
-  }, [loadProducts]);
+    // Evita actualizar el estado si el componente se desmontó antes de la respuesta
+    let cancelled = false;
+
+    getProducts()
+      .then((data) => {
+        if (cancelled) return;
+        setProducts(data.filter(isStoreProduct)); // solo los nuestros
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(getErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   const refetch = () => {
     setLoading(true);
-    void loadProducts();
+    setReloadKey((key) => key + 1);
   };
 
   return { products, loading, error, refetch };
